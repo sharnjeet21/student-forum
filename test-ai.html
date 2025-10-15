@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Response Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .response { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 4px; border-left: 4px solid #007bff; }
+        .ai-response { background: linear-gradient(to right, #e3f2fd, #f3e5f5); border-left-color: #2196f3; }
+        .error { color: red; margin-top: 10px; }
+        .success { color: green; margin-top: 10px; }
+        .loading { color: #666; font-style: italic; }
+        .confidence { font-size: 0.9em; color: #666; margin-top: 5px; }
+        .follow-up { margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 4px; }
+        .follow-up h4 { margin: 0 0 10px 0; color: #1976d2; }
+        .follow-up ul { margin: 0; padding-left: 20px; }
+    </style>
+</head>
+<body>
+    <h1>🤖 AI Response Test</h1>
+    <p>Test the Gemini AI auto-response functionality for student questions.</p>
+    
+    <form id="questionForm">
+        <div class="form-group">
+            <label for="title">Question Title:</label>
+            <input type="text" id="title" name="title" placeholder="What's your question?" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="content">Question Details:</label>
+            <textarea id="content" name="content" rows="5" placeholder="Provide more details about your question..." required></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="category">Category:</label>
+            <select id="category" name="category" required>
+                <option value="">Select category</option>
+                <option value="general">General</option>
+                <option value="homework">Homework</option>
+                <option value="programming">Programming</option>
+                <option value="math">Math</option>
+                <option value="science">Science</option>
+                <option value="literature">Literature</option>
+            </select>
+        </div>
+        
+        <button type="submit">Ask Question & Get AI Response</button>
+    </form>
+    
+    <div id="result"></div>
+
+    <script>
+        const form = document.getElementById('questionForm');
+        const result = document.getElementById('result');
+
+        // Sample questions for quick testing
+        const sampleQuestions = {
+            programming: {
+                title: "How do I fix a JavaScript TypeError?",
+                content: "I'm getting 'TypeError: Cannot read property of undefined' in my JavaScript code. What does this mean and how can I fix it?"
+            },
+            math: {
+                title: "How do I solve quadratic equations?",
+                content: "I'm struggling with quadratic equations like ax² + bx + c = 0. Can you explain the quadratic formula and how to use it?"
+            },
+            science: {
+                title: "What is photosynthesis?",
+                content: "I need to understand photosynthesis for my biology class. How does it work and why is it important?"
+            },
+            homework: {
+                title: "Help with essay structure",
+                content: "I need to write a 5-paragraph essay but I'm not sure how to structure it properly. What should go in each paragraph?"
+            }
+        };
+
+        // Add sample question buttons
+        const sampleDiv = document.createElement('div');
+        sampleDiv.innerHTML = `
+            <h3>Quick Test Questions:</h3>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
+                ${Object.keys(sampleQuestions).map(category => 
+                    `<button type="button" onclick="loadSample('${category}')" style="background: #28a745;">${category}</button>`
+                ).join('')}
+            </div>
+        `;
+        form.parentNode.insertBefore(sampleDiv, form);
+
+        window.loadSample = function(category) {
+            const sample = sampleQuestions[category];
+            document.getElementById('title').value = sample.title;
+            document.getElementById('content').value = sample.content;
+            document.getElementById('category').value = category;
+        };
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('title', document.getElementById('title').value);
+            formData.append('content', document.getElementById('content').value);
+            formData.append('category', document.getElementById('category').value);
+            formData.append('tags', JSON.stringify([]));
+
+            try {
+                result.innerHTML = '<div class="loading">🤖 Creating question and generating AI response...</div>';
+                
+                // Create thread (this will trigger AI response)
+                const response = await fetch('http://localhost:5001/api/threads', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer test-token' // You'll need a real token for auth
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const threadId = data.thread._id;
+                    result.innerHTML = `
+                        <div class="success">✅ Question created! ID: ${threadId}</div>
+                        <div class="loading">⏳ Waiting for AI response...</div>
+                    `;
+                    
+                    // Poll for AI response
+                    pollForAIResponse(threadId);
+                } else {
+                    result.innerHTML = `<div class="error">❌ Error: ${data.message}</div>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<div class="error">❌ Network error: ${error.message}</div>`;
+            }
+        });
+
+        async function pollForAIResponse(threadId, attempts = 0) {
+            if (attempts > 10) {
+                result.innerHTML += '<div class="error">⏰ AI response timeout</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://localhost:5001/api/replies/thread/${threadId}`);
+                const data = await response.json();
+                
+                if (data.success && data.replies.length > 0) {
+                    const aiReply = data.replies.find(reply => reply.isAIGenerated);
+                    
+                    if (aiReply) {
+                        displayAIResponse(aiReply);
+                        return;
+                    }
+                }
+                
+                // Wait and try again
+                setTimeout(() => pollForAIResponse(threadId, attempts + 1), 2000);
+            } catch (error) {
+                console.error('Polling error:', error);
+                setTimeout(() => pollForAIResponse(threadId, attempts + 1), 2000);
+            }
+        }
+
+        function displayAIResponse(reply) {
+            const confidencePercent = reply.aiConfidence ? Math.round(reply.aiConfidence * 100) : 'N/A';
+            
+            let followUpHtml = '';
+            if (reply.followUpQuestions && reply.followUpQuestions.length > 0) {
+                followUpHtml = `
+                    <div class="follow-up">
+                        <h4>💡 Related Questions to Explore:</h4>
+                        <ul>
+                            ${reply.followUpQuestions.map(q => `<li>${q}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            result.innerHTML = `
+                <div class="response ai-response">
+                    <h3>🤖 AI Assistant Response</h3>
+                    <div class="confidence">Confidence: ${confidencePercent}%</div>
+                    <div style="margin-top: 10px; white-space: pre-wrap;">${reply.content}</div>
+                    ${followUpHtml}
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

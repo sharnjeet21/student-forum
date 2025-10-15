@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .file-list { margin-top: 10px; }
+        .file-item { padding: 10px; background: #f8f9fa; margin: 5px 0; border-radius: 4px; }
+        .error { color: red; margin-top: 10px; }
+        .success { color: green; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>File Upload Test</h1>
+    
+    <form id="uploadForm">
+        <div class="form-group">
+            <label for="title">Title:</label>
+            <input type="text" id="title" name="title" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="content">Content:</label>
+            <textarea id="content" name="content" rows="5" required></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="category">Category:</label>
+            <select id="category" name="category" required>
+                <option value="">Select category</option>
+                <option value="general">General</option>
+                <option value="homework">Homework</option>
+                <option value="programming">Programming</option>
+                <option value="math">Math</option>
+                <option value="science">Science</option>
+                <option value="literature">Literature</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="files">Files (JPEG, JPG, PDF - max 10MB each):</label>
+            <input type="file" id="files" name="files" multiple accept=".jpg,.jpeg,.pdf">
+            <div id="fileList" class="file-list"></div>
+        </div>
+        
+        <button type="submit">Create Thread</button>
+    </form>
+    
+    <div id="result"></div>
+
+    <script>
+        const fileInput = document.getElementById('files');
+        const fileList = document.getElementById('fileList');
+        const form = document.getElementById('uploadForm');
+        const result = document.getElementById('result');
+
+        fileInput.addEventListener('change', function() {
+            fileList.innerHTML = '';
+            Array.from(this.files).forEach(file => {
+                const div = document.createElement('div');
+                div.className = 'file-item';
+                div.textContent = `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+                fileList.appendChild(div);
+            });
+        });
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('title', document.getElementById('title').value);
+            formData.append('content', document.getElementById('content').value);
+            formData.append('category', document.getElementById('category').value);
+            formData.append('tags', JSON.stringify([]));
+            
+            Array.from(fileInput.files).forEach(file => {
+                formData.append('attachments', file);
+            });
+
+            try {
+                result.innerHTML = '<p>Uploading...</p>';
+                
+                const response = await fetch('http://localhost:5001/api/threads', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer your-test-token-here'
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    result.innerHTML = `<div class="success">Thread created successfully! ID: ${data.thread._id}</div>`;
+                    form.reset();
+                    fileList.innerHTML = '';
+                } else {
+                    result.innerHTML = `<div class="error">Error: ${data.message}</div>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<div class="error">Network error: ${error.message}</div>`;
+            }
+        });
+    </script>
+</body>
+</html>
